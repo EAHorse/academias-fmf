@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Generate Icons</title>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <script>
+    const sizes = [192, 512];
+    sizes.forEach(size => {
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      
+      const gradient = ctx.createLinearGradient(0, 0, size, size);
+      gradient.addColorStop(0, '#16a34a');
+      gradient.addColorStop(1, '#2563eb');
+      
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.roundRect(0, 0, size, size, size * 0.125);
+      ctx.fill();
+      
+      ctx.fillStyle = 'white';
+      ctx.font = `bold ${size * 0.47}px Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('FMF', size / 2, size * 0.58);
+      
+      ctx.globalAlpha = 0.3;
+      ctx.beginPath();
+      ctx.arc(size / 2, size * 0.78, size * 0.078, 0, Math.PI * 2);
+      ctx.fill();
+      
+      canvas.toBlob(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `pwa-${size}x${size}.png`;
+        a.click();
+      });
+    });
+  </script>
+</body>
+</html>

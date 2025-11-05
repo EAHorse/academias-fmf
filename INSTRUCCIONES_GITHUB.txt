@@ -1,0 +1,65 @@
+=================================================================
+INSTRUCCIONES PARA SUBIR EL PROYECTO A GITHUB
+=================================================================
+
+PASO 1: Verificar que tienes Git instalado
+-------------------------------------------
+Abre una terminal (Command Prompt o PowerShell) y escribe:
+    git --version
+
+Si no está instalado, descárgalo de: https://git-scm.com/download/win
+
+
+PASO 2: Navegar a la carpeta del proyecto
+------------------------------------------
+En la terminal, ve a la carpeta donde está el proyecto:
+    cd C:\Users\01\tu-carpeta-del-proyecto
+
+
+PASO 3: Inicializar Git (si no está inicializado)
+--------------------------------------------------
+    git init
+    git branch -M main
+
+
+PASO 4: Configurar tu identidad de Git (una sola vez)
+------------------------------------------------------
+    git config --global user.email "tu-email@ejemplo.com"
+    git config --global user.name "EAHorse"
+
+
+PASO 5: Agregar todos los archivos
+-----------------------------------
+    git add .
+
+
+PASO 6: Hacer el primer commit
+-------------------------------
+    git commit -m "Initial commit: Sistema de Evaluación FMF"
+
+
+PASO 7: Conectar con GitHub
+----------------------------
+    git remote add origin https://github.com/EAHorse/lowCodeFMF.git
+
+
+PASO 8: Subir los archivos
+---------------------------
+    git push -u origin main
+
+Cuando te pida credenciales:
+- Usuario: EAHorse
+- Contraseña: Tu Personal Access Token de GitHub
+
+
+=================================================================
+IMPORTANTE: Archivos que NO se subirán (están en .gitignore)
+=================================================================
+- node_modules/
+- dist/
+- .env (configuración local)
+- archivos .tar.gz
+
+Estos se excluyen automáticamente por el archivo .gitignore
+
+=================================================================

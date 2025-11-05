@@ -1,0 +1,331 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
+import { ClipboardCheck, Save, Send } from 'lucide-react';
+
+interface KPICategory {
+  id: string;
+  name: string;
+  description: string | null;
+  weight: number;
+  order_index: number;
+}
+
+interface KPI {
+  id: string;
+  category_id: string;
+  name: string;
+  description: string | null;
+  max_score: number;
+  order_index: number;
+}
+
+interface Academy {
+  id: string;
+  name: string;
+}
+
+interface Evaluator {
+  id: string;
+  full_name: string;
+  fmf_credential: string;
+}
+
+interface Score {
+  kpi_id: string;
+  score: number;
+  comments: string;
+}
+
+export default function EvaluationForm() {
+  const { evaluator } = useAuth();
+  const [categories, setCategories] = useState<KPICategory[]>([]);
+  const [kpis, setKpis] = useState<KPI[]>([]);
+  const [academies, setAcademies] = useState<Academy[]>([]);
+  const [selectedAcademy, setSelectedAcademy] = useState('');
+  const [evaluationDate, setEvaluationDate] = useState(new Date().toISOString().split('T')[0]);
+  const [notes, setNotes] = useState('');
+  const [scores, setScores] = useState<Record<string, Score>>({});
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const [categoriesRes, kpisRes, academiesRes] = await Promise.all([
+        supabase.from('kpi_categories').select('*').order('order_index'),
+        supabase.from('kpis').select('*').order('order_index'),
+        supabase.from('academies').select('id, name').order('name')
+      ]);
+
+      if (categoriesRes.data) setCategories(categoriesRes.data);
+      if (kpisRes.data) {
+        setKpis(kpisRes.data);
+        const initialScores: Record<string, Score> = {};
+        kpisRes.data.forEach(kpi => {
+          initialScores[kpi.id] = { kpi_id: kpi.id, score: 0, comments: '' };
+        });
+        setScores(initialScores);
+      }
+      if (academiesRes.data) setAcademies(academiesRes.data);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    }
+  };
+
+  const updateScore = (kpiId: string, field: 'score' | 'comments', value: number | string) => {
+    if (field === 'score') {
+      const numValue = typeof value === 'number' ? value : parseFloat(value as string);
+
+      if (numValue < 0) {
+        alert('La puntuación no puede ser menor a 0');
+        return;
+      }
+
+      if (numValue > 10) {
+        alert('La puntuación no puede ser mayor a 10');
+        return;
+      }
+    }
+
+    setScores(prev => ({
+      ...prev,
+      [kpiId]: {
+        ...prev[kpiId],
+        [field]: value
+      }
+    }));
+  };
+
+  const saveEvaluation = async (status: 'draft' | 'completed') => {
+    if (!selectedAcademy) {
+      setMessage({ type: 'error', text: 'Debe seleccionar una academia' });
+      return;
+    }
+
+    if (!evaluator) {
+      setMessage({ type: 'error', text: 'Error: No se encontró el evaluador' });
+      return;
+    }
+
+    setLoading(true);
+    setMessage(null);
+
+    try {
+      const { data: evaluation, error: evalError } = await supabase
+        .from('evaluations')
+        .insert([{
+          academy_id: selectedAcademy,
+          evaluator_id: evaluator.id,
+          evaluation_date: evaluationDate,
+          status,
+          notes
+        }])
+        .select()
+        .single();
+
+      if (evalError) throw evalError;
+
+      const scoreRecords = Object.values(scores).map(score => ({
+        evaluation_id: evaluation.id,
+        kpi_id: score.kpi_id,
+        score: score.score,
+        comments: score.comments
+      }));
+
+      const { error: scoresError } = await supabase
+        .from('evaluation_scores')
+        .insert(scoreRecords);
+
+      if (scoresError) throw scoresError;
+
+      setMessage({
+        type: 'success',
+        text: status === 'draft' ? 'Evaluación guardada como borrador' : 'Evaluación completada exitosamente'
+      });
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (error: any) {
+      setMessage({
+        type: 'error',
+        text: error.message || 'Error al guardar la evaluación'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getKPIsByCategory = (categoryId: string) => {
+    return kpis.filter(kpi => kpi.category_id === categoryId);
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-lg p-6">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="p-2 bg-orange-100 rounded-lg">
+          <ClipboardCheck className="w-6 h-6 text-orange-600" />
+        </div>
+        <h2 className="text-2xl font-bold text-gray-800">Formulario de Evaluación</h2>
+      </div>
+
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Academia *
+            </label>
+            <select
+              value={selectedAcademy}
+              onChange={(e) => setSelectedAcademy(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              required
+            >
+              <option value="">Seleccionar academia</option>
+              {academies.map(academy => (
+                <option key={academy.id} value={academy.id}>
+                  {academy.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Evaluador
+            </label>
+            <div className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700">
+              {evaluator ? `${evaluator.full_name} - ${evaluator.fmf_credential}` : 'No disponible'}
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Fecha de Evaluación
+          </label>
+          <input
+            type="date"
+            value={evaluationDate}
+            onChange={(e) => setEvaluationDate(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+          />
+        </div>
+
+        {categories.map(category => {
+          const categoryKpis = getKPIsByCategory(category.id);
+          return (
+            <div key={category.id} className="border border-gray-200 rounded-lg p-4">
+              <div className="mb-4">
+                <h3 className="text-lg font-bold text-gray-800">{category.name}</h3>
+                <p className="text-sm text-gray-600">{category.description}</p>
+                <span className="inline-block mt-1 px-3 py-1 bg-orange-100 text-orange-800 text-xs font-semibold rounded-full">
+                  Peso: {category.weight}%
+                </span>
+              </div>
+
+              <div className="space-y-4">
+                {categoryKpis.map(kpi => (
+                  <div key={kpi.id} className="bg-gray-50 rounded-lg p-4">
+                    <div className="mb-3">
+                      <h4 className="font-semibold text-gray-800">{kpi.name}</h4>
+                      <p className="text-sm text-gray-600">{kpi.description}</p>
+                      <span className="text-xs text-gray-500">Puntuación máxima: {kpi.max_score}</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Puntuación (0-10)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="10"
+                          step="0.1"
+                          value={scores[kpi.id]?.score || 0}
+                          onChange={(e) => updateScore(kpi.id, 'score', parseFloat(e.target.value) || 0)}
+                          onBlur={(e) => {
+                            const value = parseFloat(e.target.value);
+                            if (value > 10) {
+                              e.target.value = '10';
+                              updateScore(kpi.id, 'score', 10);
+                            } else if (value < 0) {
+                              e.target.value = '0';
+                              updateScore(kpi.id, 'score', 0);
+                            }
+                          }}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Comentarios
+                        </label>
+                        <input
+                          type="text"
+                          value={scores[kpi.id]?.comments || ''}
+                          onChange={(e) => updateScore(kpi.id, 'comments', e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                          placeholder="Observaciones"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Notas Generales
+          </label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={4}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            placeholder="Observaciones generales de la evaluación..."
+          />
+        </div>
+
+        {message && (
+          <div className={`p-4 rounded-lg ${
+            message.type === 'success'
+              ? 'bg-green-50 text-green-800 border border-green-200'
+              : 'bg-red-50 text-red-800 border border-red-200'
+          }`}>
+            {message.text}
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            onClick={() => saveEvaluation('draft')}
+            disabled={loading}
+            className="flex-1 flex items-center justify-center gap-2 bg-gray-600 text-white py-3 rounded-lg font-semibold hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+          >
+            <Save className="w-5 h-5" />
+            Guardar Borrador
+          </button>
+
+          <button
+            onClick={() => saveEvaluation('completed')}
+            disabled={loading}
+            className="flex-1 flex items-center justify-center gap-2 bg-orange-600 text-white py-3 rounded-lg font-semibold hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+          >
+            <Send className="w-5 h-5" />
+            Completar Evaluación
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
